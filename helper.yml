@@ -1,0 +1,4 @@
+extensions:
+  - filename: macos_sandbox.lcb
+    source: macos_sandbox.lcb
+    platform: macos

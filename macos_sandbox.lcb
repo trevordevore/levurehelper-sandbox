@@ -1,0 +1,201 @@
+library community.livecode.trevordevore.macossandbox
+
+  use com.livecode.foreign
+  use com.livecode.objc
+  use com.livecode.engine
+
+  metadata title is "macOS Sandbox"
+  metadata author is "Trevor DeVore"
+  metadata version is "1.0.0"
+
+  private foreign handler ObjC_NSURLAlloc() \
+        returns ObjcRetainedId binds to "objc:NSURL.+alloc"
+  private foreign handler ObjC_NSURLInitFileURLWithPath(in pObj as ObjcId, in pFilename as ObjcId) \
+        returns ObjcId binds to "objc:NSURL.-initFileURLWithPath:"
+  private foreign handler ObjC_NSURLBookMarkDataWithOptions(in pNSURL as ObjcId, in pOptions as CULong, in pValuesForKeys as optional ObjcId, in pRelativeUrl as optional ObjcId, out pError as ObjcRetainedId) \
+        returns ObjcId binds to "objc:NSURL.-bookmarkDataWithOptions:includingResourceValuesForKeys:relativeToURL:error:"
+  private foreign handler ObjC_NSURLStartAccessingSecurityScopedResource(in pNSURL as ObjcId) \
+        returns CBool binds to "objc:NSURL.-startAccessingSecurityScopedResource"
+  private foreign handler ObjC_NSURLStopAccessingSecurityScopedResource(in pNSURL as ObjcId) \
+        returns nothing binds to "objc:NSURL.stopAccessingSecurityScopedResource"
+  private foreign handler ObjC_NSURLInitByResolvingBookmarkData(in pNSURL as ObjcId, in pBookmarkData as ObjcId, in pOptions as CULong, in pRelativeURL as optional ObjcId, out pBookmarkDataIsStale as CBool, out pError as ObjcRetainedId) \
+        returns ObjcId binds to "objc:NSURL.-initByResolvingBookmarkData:options:relativeToURL:bookmarkDataIsStale:error:"
+  private foreign handler ObjC_NSURLAbsoluteString(in pNSURL as ObjcId) \
+        returns ObjcId binds to "objc:NSURL.-absoluteString"
+
+  public foreign handler ObjC_NSDataAlloc() \
+        returns ObjcRetainedId binds to "objc:NSData.+alloc"
+
+
+  /**
+  Summary: Returns bookmark data for a file.
+
+  Parameters:
+  pFilename: The target filename.
+
+  Description:
+  This function is used for accessing files across sessions in a sandbox environment. The binary data that
+  is returned can be stored and passed to `macsandRestoreFileAccess()` the next time your
+  application runs. Your application will then have access to the file without having to prompt the user again.
+
+  As an example, take an application that that opens documents and wants to restore any documents
+  that were open when the application was last closed. After the user selects the file to open you
+  pass the filename to this function and store the bookmark data that is returned (e.g. in a preference).
+  If the user manually closes the file then you can dispose of the binary data.
+
+  If, however, the user quits your application then the next time the application is launched you pass
+  the bookmark data to `macsandRestoreFileAccess()`. The security-scoped filename that is returned should
+  be stored by your application until the user closes the file at which point you should call
+  `macsandRemoveFileAccess()`. If the user quits the application with the document still open you should
+  still call `macsandRemoveFileAccess()`. You can use the bookmark data to restore access again the next
+  time. You would only delete the bookmark data if the user manually closes the file.
+
+  Returns: Bookmark data (binary)
+  */
+  public handler macsandGetFileBookmarkData(in pFilename as String) returns optional Data
+    variable tResourceKeys as List
+    variable tBookmarkOptions as Integer
+
+    variable tNSURL as optional ObjcObject
+    variable tRelativeToURL as optional ObjcObject
+    variable tNSData as optional ObjcObject
+    variable tNSError as optional ObjcObject
+
+    put tBookmarkOptions bitwise or _bookmarkOptionTypes("security scope") into tBookmarkOptions
+
+    unsafe
+      put ObjC_NSURLAlloc() into tNSURL
+      put ObjC_NSDataAlloc() into tNSData
+      put ObjC_NSURLInitFileURLWithPath(tNSURL, StringToNSString(pFilename)) into tNSURL
+      if tNSURL is not nothing then
+        put ObjC_NSURLBookMarkDataWithOptions(tNSURL, tBookmarkOptions, ListToNSArray(tResourceKeys), tRelativeToURL, tNSError) into tNSData
+      end if
+    end unsafe
+
+    if tNSError is not nothing then
+      log "macsandGetFileBookmarkData:" && NSErrorLocalizedFailureReason(tNSError)
+    else
+      return DataFromNSData(tNSData)
+    end if
+  end handler
+
+
+  /**
+  Summary: Uses data from `macsandGetFileBookmarkData()` to restore access to a file in a sandboxed application.
+
+  Parameters:
+  pBookmarkData: The binary data returned by `macsandGetFileBookmarkData()`.
+
+  Description:
+  If you store data returned from `macsandGetFileBookmarkData()` between sessions you can use this
+  handler to gain access to a file when your application starts up without having to prompt the user
+  again.
+
+  The filename returned by this handler is a security-scoped filename that you will use if you want to remove access
+  to the file from your application. This should be done when your application no longer needs access to the file.
+
+  Returns: Security-scoped filename
+  */
+  public handler macsandRestoreFileAccess(in pBookmarkData as Data) returns String
+    variable tBookmarkOptions as Integer
+    variable tGainedAccess as Boolean
+
+    variable tNSURL as optional ObjcObject
+    variable tRelativeToURL as optional ObjcObject
+    variable tBookmarkDataIsStale as Boolean
+    variable tNSData as optional ObjcObject
+    variable tNSError as optional ObjcObject
+    variable tFilename as optional ObjcObject
+
+    put DataToNSData(pBookmarkData) into tNSData
+    put tBookmarkOptions bitwise or _bookmarkOptionTypes("security scope") into tBookmarkOptions
+
+    if tNSData is not nothing then
+      unsafe
+        put ObjC_NSURLAlloc() into tNSURL
+        put ObjC_NSURLInitByResolvingBookmarkData(tNSURL, tNSData, tBookmarkOptions, tRelativeToURL, tBookmarkDataIsStale, tNSError) into tNSURL
+        if tBookmarkDataIsStale then
+          log "bookmark data is stale"
+        else
+          if tNSURL is not nothing then
+            put ObjC_NSURLStartAccessingSecurityScopedResource(tNSURL) into tGainedAccess
+            if tGainedAccess then
+              put ObjC_NSURLAbsoluteString(tNSURL) into tFilename
+            else
+              log "unable to gain access to file"
+            end if
+          end if
+        end if
+      end unsafe
+    end if
+
+    if tNSError is not nothing then
+      log "macsandRestoreFileAccess error:" && NSErrorLocalizedFailureReason(tNSError)
+    end if
+
+    if tFilename is not nothing then
+      return StringFromNSString(tFilename)
+    else
+      return ""
+    end if
+  end handler
+
+
+  /**
+  Summary: Revokes your application's access to the filename pointed to by a security-scoped filename.
+
+  Parameters:
+  pFilename: A filename returned by `macsandRestoreFileAccess()`.
+
+  Description:
+  When your application no longer needs access to a file or directy that you requested access to using
+  `macsandRestoreFileAccess()` then you must revoke the access using this handler.
+
+  Returns: Empty
+  */
+  public handler macsandRemoveFileAccess(in pFilename as String)
+    variable tNSURL as optional ObjcObject
+
+    unsafe
+      put ObjC_NSURLAlloc() into tNSURL
+      put ObjC_NSURLInitFileURLWithPath(tNSURL, StringToNSString(pFilename)) into tNSURL
+      if tNSURL is not nothing then
+        ObjC_NSURLStopAccessingSecurityScopedResource(tNSURL)
+      end if
+    end unsafe
+  end handler
+
+
+  /**
+  Summary: Returns the bitshifted value for constants.
+
+  Description:
+  https://developer.apple.com/documentation/foundation/nsurlbookmarkcreationoptions?language=objc
+  */
+  private handler _bookmarkOptionTypes(in pType as String) returns CULong
+    if pType is "minimal" then
+      return 1 shifted left by 9 bitwise
+    else if pType is "bookmark file" then
+      return 1 shifted left by 10 bitwise
+    else if pType is "security scope" then
+      return 1 shifted left by 11 bitwise
+    else if pType is "read only access" then
+      return 1 shifted left by 12 bitwise
+    end if
+  end handler
+
+
+  private foreign handler ObjC_NSErrorLocalizedFailureReason(in pObj as ObjcId) \
+        returns ObjcId binds to "objc:NSError.-localizedFailureReason"
+
+  public handler NSErrorLocalizedFailureReason(in pErrorObj as ObjcObject) returns String
+    variable tErrorString as optional ObjcObject
+
+    unsafe
+      put ObjC_NSErrorLocalizedFailureReason(pErrorObj) into tErrorString
+    end unsafe
+
+    return StringFromNSString(tErrorString)
+  end handler
+
+end library
