@@ -28,14 +28,15 @@ library community.livecode.trevordevore.macossandbox
 
 
   /**
-  Summary: Returns bookmark data for a file.
+  Summary: Returns app scoped bookmark data for a file.
 
   Parameters:
   pFilename: The target filename.
+  pReadOnly: Pass in true if you only need read only access to the file.
 
   Description:
   This function is used for accessing files across sessions in a sandbox environment. The binary data that
-  is returned can be stored and passed to `macsandRestoreFileAccess()` the next time your
+  is returned can be stored and passed to `macsandStartAccessingFile()` the next time your
   application runs. Your application will then have access to the file without having to prompt the user again.
 
   As an example, take an application that that opens documents and wants to restore any documents
@@ -44,15 +45,15 @@ library community.livecode.trevordevore.macossandbox
   If the user manually closes the file then you can dispose of the binary data.
 
   If, however, the user quits your application then the next time the application is launched you pass
-  the bookmark data to `macsandRestoreFileAccess()`. The security-scoped filename that is returned should
+  the bookmark data to `macsandStartAccessingFile()`. The security-scoped filename that is returned should
   be stored by your application until the user closes the file at which point you should call
-  `macsandRemoveFileAccess()`. If the user quits the application with the document still open you should
-  still call `macsandRemoveFileAccess()`. You can use the bookmark data to restore access again the next
+  `macsandStopAccessingFile()`. If the user quits the application with the document still open you should
+  still call `macsandStopAccessingFile()`. You can use the bookmark data to restore access again the next
   time. You would only delete the bookmark data if the user manually closes the file.
 
-  Returns: Bookmark data (binary)
+  Returns: Bookmark data (binary) or error message beginning with "error:"
   */
-  public handler macsandGetFileBookmarkData(in pFilename as String) returns optional Data
+  public handler macsandGetFileBookmarkData(in pFilename as String, in pReadOnly as Boolean) returns Any
     variable tResourceKeys as List
     variable tBookmarkOptions as Integer
 
@@ -62,6 +63,7 @@ library community.livecode.trevordevore.macossandbox
     variable tNSError as optional ObjcObject
 
     put tBookmarkOptions bitwise or _bookmarkOptionTypes("security scope") into tBookmarkOptions
+    if pReadOnly then put tBookmarkOptions bitwise or _bookmarkOptionTypes("read only access") into tBookmarkOptions
 
     unsafe
       put ObjC_NSURLAlloc() into tNSURL
@@ -73,7 +75,7 @@ library community.livecode.trevordevore.macossandbox
     end unsafe
 
     if tNSError is not nothing then
-      log "macsandGetFileBookmarkData:" && NSErrorLocalizedFailureReason(tNSError)
+      return "error:" && NSErrorLocalizedFailureReason(tNSError)
     else
       return DataFromNSData(tNSData)
     end if
@@ -81,10 +83,11 @@ library community.livecode.trevordevore.macossandbox
 
 
   /**
-  Summary: Uses data from `macsandGetFileBookmarkData()` to restore access to a file in a sandboxed application.
+  Summary: Uses data from `macsandGetFileBookmarkData()` to create a security-scoped url
 
   Parameters:
   pBookmarkData: The binary data returned by `macsandGetFileBookmarkData()`.
+  pReadOnly: Pass in true if you only need read only access to the file.
 
   Description:
   If you store data returned from `macsandGetFileBookmarkData()` between sessions you can use this
@@ -96,7 +99,7 @@ library community.livecode.trevordevore.macossandbox
 
   Returns: Security-scoped filename
   */
-  public handler macsandRestoreFileAccess(in pBookmarkData as Data) returns String
+  public handler macsandStartAccessingFile(in pBookmarkData as Data, in pReadOnly as Boolean) returns String
     variable tBookmarkOptions as Integer
     variable tGainedAccess as Boolean
 
@@ -109,20 +112,21 @@ library community.livecode.trevordevore.macossandbox
 
     put DataToNSData(pBookmarkData) into tNSData
     put tBookmarkOptions bitwise or _bookmarkOptionTypes("security scope") into tBookmarkOptions
+    if pReadOnly then put tBookmarkOptions bitwise or _bookmarkOptionTypes("read only access") into tBookmarkOptions
 
     if tNSData is not nothing then
       unsafe
         put ObjC_NSURLAlloc() into tNSURL
         put ObjC_NSURLInitByResolvingBookmarkData(tNSURL, tNSData, tBookmarkOptions, tRelativeToURL, tBookmarkDataIsStale, tNSError) into tNSURL
         if tBookmarkDataIsStale then
-          log "bookmark data is stale"
+          return "error: bookmark data is stale"
         else
           if tNSURL is not nothing then
             put ObjC_NSURLStartAccessingSecurityScopedResource(tNSURL) into tGainedAccess
             if tGainedAccess then
               put ObjC_NSURLAbsoluteString(tNSURL) into tFilename
             else
-              log "unable to gain access to file"
+              return "error: unable to gain access to file"
             end if
           end if
         end if
@@ -130,7 +134,7 @@ library community.livecode.trevordevore.macossandbox
     end if
 
     if tNSError is not nothing then
-      log "macsandRestoreFileAccess error:" && NSErrorLocalizedFailureReason(tNSError)
+      return "error:" && NSErrorLocalizedFailureReason(tNSError)
     end if
 
     if tFilename is not nothing then
@@ -145,15 +149,15 @@ library community.livecode.trevordevore.macossandbox
   Summary: Revokes your application's access to the filename pointed to by a security-scoped filename.
 
   Parameters:
-  pFilename: A filename returned by `macsandRestoreFileAccess()`.
+  pFilename: A filename returned by `macsandStartAccessingFile()`.
 
   Description:
   When your application no longer needs access to a file or directy that you requested access to using
-  `macsandRestoreFileAccess()` then you must revoke the access using this handler.
+  `macsandStartAccessingFile()` then you must revoke the access using this handler.
 
   Returns: Empty
   */
-  public handler macsandRemoveFileAccess(in pFilename as String)
+  public handler macsandStopAccessingFile(in pFilename as String)
     variable tNSURL as optional ObjcObject
 
     unsafe
