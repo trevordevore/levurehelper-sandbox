@@ -128,6 +128,7 @@ Summary: Stores bookmark data for a file opened using a system file/folder dialo
 
 Parameters:
 pFilename: The full path to the file.
+pReadOnly: Pass in true if your application only needs read access to the file.
 pIsPersistent: Pass in `false` to mark this bookmark as non persistent.
 
 Description:
@@ -140,12 +141,12 @@ See docs for `sandboxGetBookmarkDataForFiles()` for an explanation of pIsPersist
 
 Returns: Error
 */
-command sandboxStoreBookmarkDataForFile pFilename, pIsPersistent
+command sandboxStoreBookmarkDataForFile pFilename, pReadOnly, pIsPersistent
   local tError, tBookmarkData
 
   if _macosSandboxIsInUse() then
     if sFilesA[pFilename]["bookmark data"] is empty then
-      put macsandGetFileBookmarkData( pFilename ) into tBookmarkData
+      put macsandGetFileBookmarkData(pFilename, pReadOnly is true) into tBookmarkData
       if tBookmarkData begins with "error:" then
         put "unable to get file bookmark data:" && word 2 to -1 of tBookmarkData into tError
       end if
@@ -183,6 +184,7 @@ Summary: Restores access to a file for your application using stored bookmark da
 
 Parameters:
 pFilename: The full path to the file.
+pReadOnly: Pass in true if your application only needs read access to the file.
 
 Description:
 If you have previously stored bookmark data for a file (e.g. in a previous application session)
@@ -190,12 +192,12 @@ then you can restore access to that file in another session by calling this hand
 
 Returns: Error
 */
-command sandboxRestoreAccessToFile pFilename
+command sandboxRestoreAccessToFile pFilename, pReadOnly
   if _macosSandboxIsInUse() then
     local tError, tSecurityScopedFilename
 
     if sFilesA[pFilename]["bookmark data"] is not empty then
-      put macsandStartAccessingFile(sFilesA[pFilename]["bookmark data"]) into tSecurityScopedFilename
+      put macsandStartAccessingFile(sFilesA[pFilename]["bookmark data"], pReadOnly is true) into tSecurityScopedFilename
       if tSecurityScopedFilename begins with "error:" then
         put "unable to open file " & quote & pFilename & quote & ":" && word 2 to -1 of tSecurityScopedFilename into tError
       else
