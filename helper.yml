@@ -1,6 +1,6 @@
 libraries:
   - filename: sandbox.livecodescript
 extensions:
-  - filename: macos_sandbox.lcb
+  - filename: macos_sandbox.lcm
     source: macos_sandbox.lcb
     platform: macos
