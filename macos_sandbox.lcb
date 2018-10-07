@@ -53,7 +53,7 @@ library community.livecode.trevordevore.macossandbox
 
   Returns: Bookmark data (binary) or error message beginning with "error:"
   */
-  public handler macsandGetFileBookmarkData(in pFilename as String, in pReadOnly as Boolean) returns Any
+  public handler macsandGetFileBookmarkData(in pFilename as String, in pReadOnly as Boolean) returns any
     variable tResourceKeys as List
     variable tBookmarkOptions as Integer
 
@@ -63,7 +63,9 @@ library community.livecode.trevordevore.macossandbox
     variable tNSError as optional ObjcObject
 
     put tBookmarkOptions bitwise or _bookmarkOptionTypes("security scope") into tBookmarkOptions
-    if pReadOnly then put tBookmarkOptions bitwise or _bookmarkOptionTypes("read only access") into tBookmarkOptions
+    if pReadOnly then
+      put tBookmarkOptions bitwise or _bookmarkOptionTypes("read only access") into tBookmarkOptions
+    end if
 
     unsafe
       put ObjC_NSURLAlloc() into tNSURL
@@ -112,7 +114,9 @@ library community.livecode.trevordevore.macossandbox
 
     put DataToNSData(pBookmarkData) into tNSData
     put tBookmarkOptions bitwise or _bookmarkOptionTypes("security scope") into tBookmarkOptions
-    if pReadOnly then put tBookmarkOptions bitwise or _bookmarkOptionTypes("read only access") into tBookmarkOptions
+    if pReadOnly then
+      put tBookmarkOptions bitwise or _bookmarkOptionTypes("read only access") into tBookmarkOptions
+    end if
 
     if tNSData is not nothing then
       unsafe
