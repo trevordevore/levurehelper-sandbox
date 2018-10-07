@@ -148,7 +148,7 @@ command sandboxStoreBookmarkDataForFile pFilename, pReadOnly, pIsPersistent
     if sFilesA[pFilename]["bookmark data"] is empty then
       put macsandGetFileBookmarkData(pFilename, pReadOnly is true) into tBookmarkData
       if tBookmarkData begins with "error:" then
-        put "unable to get file bookmark data:" && word 2 to -1 of tBookmarkData into tError
+        put word 2 to -1 of tBookmarkData into tError
       end if
 
       if tError is empty then
@@ -199,8 +199,10 @@ command sandboxRestoreAccessToFile pFilename, pReadOnly
     if sFilesA[pFilename]["bookmark data"] is not empty then
       put macsandStartAccessingFile(sFilesA[pFilename]["bookmark data"], pReadOnly is true) into tSecurityScopedFilename
       if tSecurityScopedFilename begins with "error:" then
-        put "unable to open file " & quote & pFilename & quote & ":" && word 2 to -1 of tSecurityScopedFilename into tError
-      else
+        put word 2 to -1 of tSecurityScopedFilename into tError
+      end if
+
+      if tError is empty then
         put tSecurityScopedFilename into sFilesA[pFilename]["security scoped filename"]
       end if
     end if
