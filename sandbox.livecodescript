@@ -73,6 +73,7 @@ command sandboxSetBookmarkDataForFiles pFilesA
   repeat for each key tFile in pFilesA
     if pFilesA[tFile]["bookmark data"] is not empty then
       put pFilesA[tFile]["bookmark data"] into sFilesA[tFile]["bookmark data"]
+      put pFilesA[tFile]["persistent"] into sFilesA[tFile]["persistent"]
     end if
   end repeat
 
