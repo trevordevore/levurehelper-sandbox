@@ -1,31 +1,12 @@
-- [sandboxDeleteBookmarkDataForFile](#sandboxDeleteBookmarkDataForFile)
 - [sandboxGetBookmarkDataForFile](#sandboxGetBookmarkDataForFile)
 - [sandboxGetBookmarkDataForFiles](#sandboxGetBookmarkDataForFiles)
 - [sandboxRestoreAccessToFile](#sandboxRestoreAccessToFile)
 - [sandboxSetBookmarkDataForFile](#sandboxSetBookmarkDataForFile)
->
 - [sandboxSetBookmarkDataForFiles](#sandboxSetBookmarkDataForFiles)
+>
 - [sandboxStopAccessingAllFiles](#sandboxStopAccessingAllFiles)
 - [sandboxStopAccessingFile](#sandboxStopAccessingFile)
 - [sandboxStoreBookmarkDataForFile](#sandboxStoreBookmarkDataForFile)
-
-<br>
-
-## <a name="sandboxDeleteBookmarkDataForFile"></a>sandboxDeleteBookmarkDataForFile
-
-**Type**: command
-
-**Syntax**: `sandboxDeleteBookmarkDataForFile <pFilename>`
-
-**Summary**: Deletes the bookmark data for a file.
-
-**Returns**: nothing
-
-**Description**:
-
-Call this handler if you would like to remove the bookmark data for a file from the internal store.
-If you have already called `sandboxRestoreAccessToFile` for this file you will not lose access to it
-by calling this handler. You would still need to call `sandboxStopAccessingFile`.
 
 <br>
 
@@ -200,7 +181,7 @@ access to the file.
 
 **Type**: command
 
-**Syntax**: `sandboxStoreBookmarkDataForFile <pFilename>,<pIsPersistent>`
+**Syntax**: `sandboxStoreBookmarkDataForFile <pFilename>,<pReadOnly>,<pIsPersistent>`
 
 **Summary**: Stores bookmark data for a file opened using a system file/folder dialog or drag and drop.
 
@@ -211,6 +192,7 @@ access to the file.
 | Name | Description |
 |:---- |:----------- |
 | `pFilename` |  The full path to the file. |
+| `pReadOnly` |  Pass in true if your application only needs read access to the file. |
 | `pIsPersistent` |  Pass in `false` to mark this bookmark as non persistent. |
 
 **Description**:
