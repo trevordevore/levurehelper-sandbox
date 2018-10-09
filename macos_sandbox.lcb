@@ -10,21 +10,18 @@ library community.livecode.trevordevore.macossandbox
 
   private foreign handler ObjC_NSURLAlloc() \
         returns ObjcRetainedId binds to "objc:NSURL.+alloc"
-  private foreign handler ObjC_NSURLInitFileURLWithPath(in pObj as ObjcId, in pFilename as ObjcId) \
-        returns ObjcId binds to "objc:NSURL.-initFileURLWithPath:"
+  private foreign handler ObjC_NSURLInitFileURLWithPath(in pObj as ObjcRetainedId, in pFilename as ObjcId) \
+        returns optional ObjcRetainedId binds to "objc:NSURL.-initFileURLWithPath:"
   private foreign handler ObjC_NSURLBookMarkDataWithOptions(in pNSURL as ObjcId, in pOptions as CULong, in pValuesForKeys as optional ObjcId, in pRelativeUrl as optional ObjcId, out pError as ObjcRetainedId) \
-        returns ObjcId binds to "objc:NSURL.-bookmarkDataWithOptions:includingResourceValuesForKeys:relativeToURL:error:"
+        returns optional ObjcId binds to "objc:NSURL.-bookmarkDataWithOptions:includingResourceValuesForKeys:relativeToURL:error:"
   private foreign handler ObjC_NSURLStartAccessingSecurityScopedResource(in pNSURL as ObjcId) \
         returns CBool binds to "objc:NSURL.-startAccessingSecurityScopedResource"
   private foreign handler ObjC_NSURLStopAccessingSecurityScopedResource(in pNSURL as ObjcId) \
         returns nothing binds to "objc:NSURL.stopAccessingSecurityScopedResource"
   private foreign handler ObjC_NSURLInitByResolvingBookmarkData(in pNSURL as ObjcId, in pBookmarkData as ObjcId, in pOptions as CULong, in pRelativeURL as optional ObjcId, out pBookmarkDataIsStale as CBool, out pError as ObjcRetainedId) \
-        returns ObjcId binds to "objc:NSURL.-initByResolvingBookmarkData:options:relativeToURL:bookmarkDataIsStale:error:"
+        returns optional ObjcRetainedId binds to "objc:NSURL.-initByResolvingBookmarkData:options:relativeToURL:bookmarkDataIsStale:error:"
   private foreign handler ObjC_NSURLAbsoluteString(in pNSURL as ObjcId) \
         returns ObjcId binds to "objc:NSURL.-absoluteString"
-
-  public foreign handler ObjC_NSDataAlloc() \
-        returns ObjcRetainedId binds to "objc:NSData.+alloc"
 
 
   /**
@@ -33,6 +30,7 @@ library community.livecode.trevordevore.macossandbox
   Parameters:
   pFilename: The target filename.
   pReadOnly: Pass in true if you only need read only access to the file.
+  rErrorMsg: Any errors will be reported in this variable.
 
   Description:
   This function is used for accessing files across sessions in a sandbox environment. The binary data that
@@ -51,36 +49,54 @@ library community.livecode.trevordevore.macossandbox
   still call `macsandStopAccessingFile()`. You can use the bookmark data to restore access again the next
   time. You would only delete the bookmark data if the user manually closes the file.
 
-  Returns: Bookmark data (binary) or error message beginning with "error:"
+  Returns: Bookmark data (binary)
   */
-  public handler macsandGetFileBookmarkData(in pFilename as String, in pReadOnly as Boolean) returns any
-    variable tResourceKeys as List
-    variable tBookmarkOptions as Integer
-
+  public handler macsandGetFileBookmarkData(in pFilename as String, in pReadOnly as Boolean, out rErrorMsg as String) returns Data
+    variable tData as Data
     variable tNSURL as optional ObjcObject
-    variable tRelativeToURL as optional ObjcObject
     variable tNSData as optional ObjcObject
     variable tNSError as optional ObjcObject
 
-    put tBookmarkOptions bitwise or _bookmarkOptionTypes("security scope") into tBookmarkOptions
+    unsafe
+      put ObjC_NSURLAlloc() into tNSURL
+      put ObjC_NSURLInitFileURLWithPath(tNSURL, StringToNSString(pFilename)) into tNSURL
+    end unsafe
+
+    if tNSURL is nothing then
+      put "unable to resolve" && pFilename into rErrorMsg
+    else
+      put _getFileBookmarkData(tNSURL, pReadOnly, tNSError) into tNSData
+
+      if tNSError is not nothing then
+        put NSErrorLocalizedFailureReason(tNSError) into rErrorMsg
+      else if tNSData is not nothing then
+        put DataFromNSData(tNSData) into tData
+      end if
+    end if
+
+    return tData
+  end handler
+
+
+  private handler _getFileBookmarkData(in pNSURL as ObjcObject, in pReadOnly as Boolean, out rNSError as optional ObjcObject) returns optional ObjcObject
+    variable tResourceKeys as List
+    variable tBookmarkOptions as Integer
+
+    variable tRelativeToURL as optional ObjcObject
+    variable tNSData as optional ObjcObject
+
+    // NSURLBookmarkCreationWithSecurityScope
+    put tBookmarkOptions bitwise or (1 shifted left by 11 bitwise) into tBookmarkOptions
     if pReadOnly then
-      put tBookmarkOptions bitwise or _bookmarkOptionTypes("read only access") into tBookmarkOptions
+      // NSURLBookmarkCreationSecurityScopeAllowOnlyReadAccess
+      put tBookmarkOptions bitwise or (1 shifted left by 12 bitwise) into tBookmarkOptions
     end if
 
     unsafe
-      put ObjC_NSURLAlloc() into tNSURL
-      put ObjC_NSDataAlloc() into tNSData
-      put ObjC_NSURLInitFileURLWithPath(tNSURL, StringToNSString(pFilename)) into tNSURL
-      if tNSURL is not nothing then
-        put ObjC_NSURLBookMarkDataWithOptions(tNSURL, tBookmarkOptions, ListToNSArray(tResourceKeys), tRelativeToURL, tNSError) into tNSData
-      end if
+      put ObjC_NSURLBookMarkDataWithOptions(pNSURL, tBookmarkOptions, ListToNSArray(tResourceKeys), tRelativeToURL, rNSError) into tNSData
     end unsafe
 
-    if tNSError is not nothing then
-      return "error:" && NSErrorLocalizedFailureReason(tNSError)
-    else
-      return DataFromNSData(tNSData)
-    end if
+    return tNSData
   end handler
 
 
@@ -89,7 +105,7 @@ library community.livecode.trevordevore.macossandbox
 
   Parameters:
   pBookmarkData: The binary data returned by `macsandGetFileBookmarkData()`.
-  pReadOnly: Pass in true if you only need read only access to the file.
+  rErrorMsg: Any errors will be reported in this variable.
 
   Description:
   If you store data returned from `macsandGetFileBookmarkData()` between sessions you can use this
@@ -99,9 +115,12 @@ library community.livecode.trevordevore.macossandbox
   The filename returned by this handler is a security-scoped filename that you will use if you want to remove access
   to the file from your application. This should be done when your application no longer needs access to the file.
 
+  If the bookmark data is stale the error will be "bookmark data is stale". This can happen if the file no longer
+  exists at the same location as it was at when the bookmark was created.
+
   Returns: Security-scoped filename
   */
-  public handler macsandStartAccessingFile(in pBookmarkData as Data, in pReadOnly as Boolean) returns String
+  public handler macsandStartAccessingFile(in pBookmarkData as Data, out rErrorMsg as String) returns String
     variable tBookmarkOptions as Integer
     variable tGainedAccess as Boolean
 
@@ -113,32 +132,30 @@ library community.livecode.trevordevore.macossandbox
     variable tFilename as optional ObjcObject
 
     put DataToNSData(pBookmarkData) into tNSData
-    put tBookmarkOptions bitwise or _bookmarkOptionTypes("security scope") into tBookmarkOptions
-    if pReadOnly then
-      put tBookmarkOptions bitwise or _bookmarkOptionTypes("read only access") into tBookmarkOptions
-    end if
+
+    // NSURLBookmarkResolutionWithSecurityScope
+    put tBookmarkOptions bitwise or (1 shifted left by 10 bitwise) into tBookmarkOptions
 
     if tNSData is not nothing then
       unsafe
         put ObjC_NSURLAlloc() into tNSURL
         put ObjC_NSURLInitByResolvingBookmarkData(tNSURL, tNSData, tBookmarkOptions, tRelativeToURL, tBookmarkDataIsStale, tNSError) into tNSURL
-        if tBookmarkDataIsStale then
-          return "error: bookmark data is stale"
+
+        if tNSError is not nothing then
+          put NSErrorLocalizedFailureReason(tNSError) into rErrorMsg
+        else if tBookmarkDataIsStale then
+          put "bookmark data is stale" into rErrorMsg
         else
           if tNSURL is not nothing then
             put ObjC_NSURLStartAccessingSecurityScopedResource(tNSURL) into tGainedAccess
             if tGainedAccess then
               put ObjC_NSURLAbsoluteString(tNSURL) into tFilename
             else
-              return "error: unable to gain access to file"
+              put "unable to gain access to file" into rErrorMsg
             end if
           end if
         end if
       end unsafe
-    end if
-
-    if tNSError is not nothing then
-      return "error:" && NSErrorLocalizedFailureReason(tNSError)
     end if
 
     if tFilename is not nothing then
@@ -174,27 +191,9 @@ library community.livecode.trevordevore.macossandbox
   end handler
 
 
-  /**
-  Summary: Returns the bitshifted value for constants.
-
-  Description:
-  https://developer.apple.com/documentation/foundation/nsurlbookmarkcreationoptions?language=objc
-  */
-  private handler _bookmarkOptionTypes(in pType as String) returns CULong
-    if pType is "minimal" then
-      return 1 shifted left by 9 bitwise
-    else if pType is "bookmark file" then
-      return 1 shifted left by 10 bitwise
-    else if pType is "security scope" then
-      return 1 shifted left by 11 bitwise
-    else if pType is "read only access" then
-      return 1 shifted left by 12 bitwise
-    end if
-  end handler
-
-
-  private foreign handler ObjC_NSErrorLocalizedFailureReason(in pObj as ObjcId) \
+  private foreign handler ObjC_NSErrorLocalizedFailureReason(in pObj as ObjcRetainedId) \
         returns ObjcId binds to "objc:NSError.-localizedFailureReason"
+
 
   public handler NSErrorLocalizedFailureReason(in pErrorObj as ObjcObject) returns String
     variable tErrorString as optional ObjcObject

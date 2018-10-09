@@ -145,16 +145,11 @@ command sandboxStoreBookmarkDataForFile pFilename, pReadOnly, pIsPersistent
   local tError, tBookmarkData
 
   if _macosSandboxIsInUse() then
-    if sFilesA[pFilename]["bookmark data"] is empty then
-      put macsandGetFileBookmarkData(pFilename, pReadOnly is true) into tBookmarkData
-      if tBookmarkData begins with "error:" then
-        put word 2 to -1 of tBookmarkData into tError
-      end if
+    put macsandGetFileBookmarkData(pFilename, pReadOnly is true, tError) into tBookmarkData
 
-      if tError is empty then
-        put tBookmarkData into sFilesA[pFilename]["bookmark data"]
-        put pIsPersistent is not false into sFilesA[pFilename]["persistent"]
-      end if
+    if tError is empty then
+      put tBookmarkData into sFilesA[pFilename]["bookmark data"]
+      put pIsPersistent is not false into sFilesA[pFilename]["persistent"]
     end if
   end if
 
@@ -163,28 +158,10 @@ end sandboxStoreBookmarkDataForFile
 
 
 /**
-Summary: Deletes the bookmark data for a file.
-
-Description:
-Call this handler if you would like to remove the bookmark data for a file from the internal store.
-If you have already called `sandboxRestoreAccessToFile` for this file you will not lose access to it
-by calling this handler. You would still need to call `sandboxStopAccessingFile`.
-
-Returns: nothing
-*/
-command sandboxDeleteBookmarkDataForFile pFilename
-  delete local sFilesA[pFilename]["bookmark data"]
-  delete local sFilesA[pFilename]["persistent"]
-  return empty
-end sandboxDeleteBookmarkDataForFile
-
-
-/**
 Summary: Restores access to a file for your application using stored bookmark data.
 
 Parameters:
 pFilename: The full path to the file.
-pReadOnly: Pass in true if your application only needs read access to the file.
 
 Description:
 If you have previously stored bookmark data for a file (e.g. in a previous application session)
@@ -192,14 +169,22 @@ then you can restore access to that file in another session by calling this hand
 
 Returns: Error
 */
-command sandboxRestoreAccessToFile pFilename, pReadOnly
+command sandboxRestoreAccessToFile pFilename
+  local tError
+
   if _macosSandboxIsInUse() then
-    local tError, tSecurityScopedFilename
+    local tSecurityScopedFilename
 
     if sFilesA[pFilename]["bookmark data"] is not empty then
-      put macsandStartAccessingFile(sFilesA[pFilename]["bookmark data"], pReadOnly is true) into tSecurityScopedFilename
-      if tSecurityScopedFilename begins with "error:" then
-        put word 2 to -1 of tSecurityScopedFilename into tError
+      put macsandStartAccessingFile(sFilesA[pFilename]["bookmark data"], tError) into tSecurityScopedFilename
+
+      # If pFilename exists but bookmark data is stale then try to refresh the bookmark
+      if tError is "bookmark data is stale" and there is a file pFilename then
+        local tBookmarkData
+        put macsandGetFileBookmarkData(pFilename, false, tError) into tBookmarkData
+        if tError is empty then
+          put macsandStartAccessingFile(tBookmarkData, tError) into tSecurityScopedFilename
+        end if
       end if
 
       if tError is empty then
