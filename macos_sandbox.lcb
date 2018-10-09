@@ -105,6 +105,7 @@ library community.livecode.trevordevore.macossandbox
 
   Parameters:
   pBookmarkData: The binary data returned by `macsandGetFileBookmarkData()`.
+  rBookmarkDataIsStale: Set to true if the bookmark data is stale.
   rErrorMsg: Any errors will be reported in this variable.
 
   Description:
@@ -120,13 +121,12 @@ library community.livecode.trevordevore.macossandbox
 
   Returns: Security-scoped filename
   */
-  public handler macsandStartAccessingFile(in pBookmarkData as Data, out rErrorMsg as String) returns String
+  public handler macsandStartAccessingFile(in pBookmarkData as Data, out rBookmarkDataIsStale as Boolean, out rErrorMsg as String) returns String
     variable tBookmarkOptions as Integer
     variable tGainedAccess as Boolean
 
     variable tNSURL as optional ObjcObject
     variable tRelativeToURL as optional ObjcObject
-    variable tBookmarkDataIsStale as Boolean
     variable tNSData as optional ObjcObject
     variable tNSError as optional ObjcObject
     variable tFilename as optional ObjcObject
@@ -139,20 +139,16 @@ library community.livecode.trevordevore.macossandbox
     if tNSData is not nothing then
       unsafe
         put ObjC_NSURLAlloc() into tNSURL
-        put ObjC_NSURLInitByResolvingBookmarkData(tNSURL, tNSData, tBookmarkOptions, tRelativeToURL, tBookmarkDataIsStale, tNSError) into tNSURL
+        put ObjC_NSURLInitByResolvingBookmarkData(tNSURL, tNSData, tBookmarkOptions, tRelativeToURL, rBookmarkDataIsStale, tNSError) into tNSURL
 
         if tNSError is not nothing then
           put NSErrorGetString(tNSError) into rErrorMsg
-        else if tBookmarkDataIsStale then
-          put "bookmark data is stale" into rErrorMsg
-        else
-          if tNSURL is not nothing then
-            put ObjC_NSURLStartAccessingSecurityScopedResource(tNSURL) into tGainedAccess
-            if tGainedAccess then
-              put ObjC_NSURLAbsoluteString(tNSURL) into tFilename
-            else
-              put "unable to gain access to file" into rErrorMsg
-            end if
+        else if tNSURL is not nothing then
+          put ObjC_NSURLStartAccessingSecurityScopedResource(tNSURL) into tGainedAccess
+          if tGainedAccess then
+            put ObjC_NSURLAbsoluteString(tNSURL) into tFilename
+          else
+            put "unable to gain access to file" into rErrorMsg
           end if
         end if
       end unsafe
