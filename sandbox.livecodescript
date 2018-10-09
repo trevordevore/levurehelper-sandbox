@@ -184,6 +184,7 @@ command sandboxRestoreAccessToFile pFilename
         put macsandGetFileBookmarkData(pFilename, false, tError) into tBookmarkData
         if tError is empty then
           put macsandStartAccessingFile(tBookmarkData, tError) into tSecurityScopedFilename
+          put tBookmarkData into sFilesA[pFilename]["bookmark data"]
         end if
       end if
 
