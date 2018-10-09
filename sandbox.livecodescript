@@ -174,18 +174,20 @@ command sandboxRestoreAccessToFile pFilename
   local tError
 
   if _macosSandboxIsInUse() then
-    local tSecurityScopedFilename
+    local tSecurityScopedFilename, tBookmarkDataIsStale
 
     if sFilesA[pFilename]["bookmark data"] is not empty then
-      put macsandStartAccessingFile(sFilesA[pFilename]["bookmark data"], tError) into tSecurityScopedFilename
+      put macsandStartAccessingFile(sFilesA[pFilename]["bookmark data"], tBookmarkDataIsStale, tError) into tSecurityScopedFilename
 
       # If pFilename exists but bookmark data is stale then try to refresh the bookmark
-      if tError is "bookmark data is stale" and there is a file pFilename then
+      if tBookmarkDataIsStale and there is a file pFilename then
         local tBookmarkData
         put macsandGetFileBookmarkData(pFilename, false, tError) into tBookmarkData
         if tError is empty then
-          put macsandStartAccessingFile(tBookmarkData, tError) into tSecurityScopedFilename
-          put tBookmarkData into sFilesA[pFilename]["bookmark data"]
+          put macsandStartAccessingFile(tBookmarkData, tBookmarkDataIsStale, tError) into tSecurityScopedFilename
+          if not tBookmarkDataIsStale and tError is empty then
+            put tBookmarkData into sFilesA[pFilename]["bookmark data"]
+          end if
         end if
       end if
 
