@@ -68,7 +68,7 @@ library community.livecode.trevordevore.macossandbox
       put _getFileBookmarkData(tNSURL, pReadOnly, tNSError) into tNSData
 
       if tNSError is not nothing then
-        put NSErrorLocalizedFailureReason(tNSError) into rErrorMsg
+        put NSErrorGetString(tNSError) into rErrorMsg
       else if tNSData is not nothing then
         put DataFromNSData(tNSData) into tData
       end if
@@ -142,7 +142,7 @@ library community.livecode.trevordevore.macossandbox
         put ObjC_NSURLInitByResolvingBookmarkData(tNSURL, tNSData, tBookmarkOptions, tRelativeToURL, tBookmarkDataIsStale, tNSError) into tNSURL
 
         if tNSError is not nothing then
-          put NSErrorLocalizedFailureReason(tNSError) into rErrorMsg
+          put NSErrorGetString(tNSError) into rErrorMsg
         else if tBookmarkDataIsStale then
           put "bookmark data is stale" into rErrorMsg
         else
@@ -193,16 +193,25 @@ library community.livecode.trevordevore.macossandbox
 
   private foreign handler ObjC_NSErrorLocalizedFailureReason(in pObj as ObjcRetainedId) \
         returns ObjcId binds to "objc:NSError.-localizedFailureReason"
+  private foreign handler ObjC_NSErrorLocalizedDescription(in pObj as ObjcRetainedId) \
+        returns ObjcId binds to "objc:NSError.-localizedDescription"
 
 
-  public handler NSErrorLocalizedFailureReason(in pErrorObj as ObjcObject) returns String
+  public handler NSErrorGetString(in pErrorObj as ObjcObject) returns String
     variable tErrorString as optional ObjcObject
 
     unsafe
       put ObjC_NSErrorLocalizedFailureReason(pErrorObj) into tErrorString
+      if tErrorString is nothing then
+        put ObjC_NSErrorLocalizedDescription(pErrorObj) into tErrorString
+      end if
     end unsafe
 
-    return StringFromNSString(tErrorString)
+    if tErrorString is not nothing then
+      return StringFromNSString(tErrorString)
+    else
+      return ""
+    end if
   end handler
 
 end library
