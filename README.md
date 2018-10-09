@@ -1,5 +1,5 @@
 # sandbox
-A Levure helper that provides file access handlers for desktop applications running in the macOS sandbox. Requires LiveCode 9 or later as it makes use of the LiveCode Builder Foreign Function Interface.
+A [Levure](https://github.com/trevordevore/levure) helper that provides file access handlers for desktop applications running in the macOS sandbox. Requires LiveCode 9 or later as it makes use of the LiveCode Builder Foreign Function Interface.
 
 To use this helper in your Levure application add the `levurehelper-sandbox` folder (you can rename it to `sandbox`) directly to your `./app/helpers` folder or add a reference to the folder to the list of `helpers` in the `app.yml` file.
 
