@@ -93,7 +93,7 @@ command OpenDocument pFilename, pSecurityScopedBookmarkData
 
   if sandboxIsInUse() then
     if pSecurityScopedBookmarkData is not empty then
-      sandboxSetBookmarkDataForFile pFilename, pSecurityScopedBookmarkData
+      sandboxSetBookmarkDataForFile pFilename, pSecurityScopedBookmarkData, false
       sandboxRestoreAccessToFile pFilename
       put the result into tError
     end if
