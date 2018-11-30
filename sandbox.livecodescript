@@ -118,6 +118,11 @@ command sandboxSetBookmarkDataForFile pFilename, pBookmarkData, pIsPersistent
   if _macosSandboxIsInUse() then
     put pBookmarkData into sFilesA[pFilename]["bookmark data"]
     put pIsPersistent is not false into sFilesA[pFilename]["persistent"]
+
+    # Clean up memory if there is no relevant data left to track
+    if pBookmarkData is empty and sFilesA[pFilename]["security scoped filename"] is empty then
+      delete local sFilesA[pFilename]
+    end if
   end if
 
   return empty
