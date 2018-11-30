@@ -37,25 +37,12 @@ end if
 ```
 
 ## Restoring access to a resource
-Next you need to determine how you are going to store and restore the bookmark data the next time your application launches. 
+Next you need to determine how you are going to store and restore the bookmark data the next time your application launches. There are at two scenarios you need to account for:
 
-One approach is to store the bookmark data along with a reference to the file (e.g. an array of recent files the application has opened). In this case when the application needs to open the file you can call `sandboxSetBookmarkDataForFile` followed by `sandboxRestoreAccessToFile`. 
+1. Your application only accesses a few resources that don't change, but which reside outside of your sandboxed applications container (e.g. a Documents folder)
+2. Your application provides a Recent Files menu option to open a file that they previously opened using an `open file` dialog.
 
-```
-command OpenDocument pFilename, pSecurityScopedBookmarkData
-  ...
-
-  if sandboxIsInUse() then
-    if pSecurityScopedBookmarkData is not empty then
-      sandboxSetBookmarkDataForFile pFilename, pSecurityScopedBookmarkData
-      sandboxRestoreAccessToFile pFilename
-      put the result into tError
-    end if
-  end if
-
-  ...
-end OpenDocument
-```
+### Accessing resources that don't change
 
 If your application only accesses a few resources that don't change, but which reside outside of your sandboxed applications container (e.g. a Documents folder) then you can store and restore booksmarks in one go. You would call `sandboxGetBookmarkDataForFiles()` and store the result in a preference when your application quits and pass the preference value to `sandboxSetBookmarkDataForFiles` when your application launches. You would follow up the call to `sandboxSetBookmarkDataForFiles` with calls to `sandboxRestoreAccessToFile` for each resource you need access to.
 
@@ -79,13 +66,73 @@ command InitializeApplication
     sandboxSetBookmarkDataForFiles prefsGetPref("security-scoped bookmarks")
 
     ## tFilename1/2/3 represent files that your application always uses but which require user permission to access.
-    sandboxRestoreAccessToFile tFilename1
-    sandboxRestoreAccessToFile tFilename2
-    sandboxRestoreAccessToFile tFilename3
+    if sandboxGetBookmarkDataForFile(tFilename1) is empty then
+      # Prompt user to access folders/files that your application needs access to.
+      ...
+    else
+      # User has already been prompted. Restore access.
+      sandboxRestoreAccessToFile tFilename1
+      sandboxRestoreAccessToFile tFilename2
+      sandboxRestoreAccessToFile tFilename3
+    end if
   end if
 
   ...
 end InitializeApplication
+```
+
+### Recent files menu
+
+If your application provides a File > Open Recent menu option then you need to store the bookmark data along with the recent file entry when adding the file to the list of recently opened files. When the user selects a file from the recent file menu you will need to restore access to the file using the bookmark data. The easiest way to do this is to use the [recent file APIs](https://github.com/trevordevore/levure/wiki/helper-file_system#recent-files) in the File System helper that ships with Levure. It provides support for working with bookmark data and will store the bookmark data in the preference that stores the list of recently opened files.
+
+When opening a document account for the fact that the bookmark data may be passed in with the filename:
+
+```
+command OpenDocument pFilename, pSecurityScopedBookmarkData
+  ...
+
+  if sandboxIsInUse() then
+    if pSecurityScopedBookmarkData is not empty then
+      sandboxSetBookmarkDataForFile pFilename, pSecurityScopedBookmarkData
+      sandboxRestoreAccessToFile pFilename
+      put the result into tError
+    end if
+  end if
+
+  # Add to recent files list
+  if tError is empty then
+    fileSystemAddToRecentlyOpened "documents", pFilename, pFilename, pSecurityScopedBookmarkData
+    put the result into theError
+  end if
+
+  # If any files are purged from the recent files menu (array of purged files
+  # is returned in it) due to the addition of the last file then the user can # no longer open the file without going through the OS. Remove bookmark data.
+  if tError is empty then
+    repeat for each element tFileA in it
+      sandboxSetBookmarkDataForFile tFileA["file"], empty, false
+    end repeat
+  end if
+
+  ...
+end OpenDocument
+```
+
+When opening a recent file using the File > Open Recent menu you will pass in the stored bookmark data:
+
+```
+on menuPick pItemName
+  set the itemDelimiter to "|"
+
+  switch item 1 of pItemName
+    ...
+    case "open recent"
+      put URLDecode(item 2 of pItemName) into tFilename
+      put fileSystemSecurityBookmarkForRecentlyOpenedFile("documents", tFilename) into tBookmarkData
+      uiOpenDocument tFilename, tBookmarkData
+      break
+    ...
+  end switch
+end menuPick
 ```
 
 ## Closing a resources
